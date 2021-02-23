@@ -114,6 +114,9 @@ class Controller2D(object):
             throttle_output = 0.5 * self.vars.v_previous
         """
         self.vars.create_var('v_previous', 0.0)
+        self.vars.create_var('t_previous', 0.0)
+        self.vars.create_var('p_e_previous', 0.0)
+        self.vars.create_var('i_e_previous', 0.0)
 
         # Skip the first frame to store previous values properly
         if self._start_control_loop:
@@ -160,10 +163,21 @@ class Controller2D(object):
                 example, can treat self.vars.v_previous like a "global variable".
             """
             
+            t_s = t - self.vars.t_previous
+            p_e = v_desired - v
+            i_e = self.vars.i_e_previous + t_s * p_e
+            d_e = (p_e - self.vars.p_e_previous) / t_s
+
+            k_p = 0.2
+            k_i = 0.05
+            k_d = 0.01
+
+            l_c = k_p * p_e + k_i * i_e + k_d * p_e
+
             # Change these outputs with the longitudinal controller. Note that
             # brake_output is optional and is not required to pass the
             # assignment, as the car will naturally slow down over time.
-            throttle_output = 0
+            throttle_output = l_c if l_c > 0 else 0
             brake_output    = 0
 
             ######################################################
@@ -177,8 +191,19 @@ class Controller2D(object):
                 example, can treat self.vars.v_previous like a "global variable".
             """
             
+            l_c = 0
+            
+            for i in range(len(waypoints)):
+                d_x = (waypoints[i][0] - x)
+                d_y = (waypoints[i][1] - y)
+                l_d = np.sqrt(d_x ** 2 + d_y ** 2)
+                if l_d >= 10.0:
+                    alpha = np.arctan2(d_y,d_x) - yaw
+                    l_c = np.arctan(2*3*np.sin(alpha)/l_d)
+                    break
+            
             # Change the steer output with the lateral controller. 
-            steer_output    = 0
+            steer_output    = l_c
 
             ######################################################
             # SET CONTROLS OUTPUT
@@ -198,3 +223,6 @@ class Controller2D(object):
             in the next iteration)
         """
         self.vars.v_previous = v  # Store forward speed to be used in next step
+        self.vars.t_previous = t
+        self.vars.p_e_previous = p_e
+        self.vars.i_e_previous = i_e
